@@ -30,6 +30,20 @@ class AutonomousBattleTest {
     }
 
     @Test
+    fun fasterPokemonOpensAndTurnsThenAlternate() {
+        val fast = AutonomousBattle.fighter(150)!!
+        val slow = AutonomousBattle.fighter(95)!!
+        val state = AutonomousBattle.start(fast, slow)
+        assertTrue(AutonomousBattle.isLeftAttacker(state))
+        assertTrue(!AutonomousBattle.isLeftAttacker(state.copy(turn = 1)))
+        assertTrue(AutonomousBattle.isLeftAttacker(state.copy(turn = 2)))
+
+        val reversed = AutonomousBattle.start(slow, fast)
+        assertTrue(!AutonomousBattle.isLeftAttacker(reversed))
+        assertTrue(AutonomousBattle.isLeftAttacker(reversed.copy(turn = 1)))
+    }
+
+    @Test
     fun battleContinuesUntilOneCombatantFaints() {
         val left = AutonomousBattle.fighter(25)!!
         val right = AutonomousBattle.fighter(6)!!
