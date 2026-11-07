@@ -302,7 +302,7 @@ class WidgetRenderer(private val context: Context) {
             val frames = ArrayList<android.graphics.Bitmap>()
             var state = AutonomousBattle.start(left, right)
             val rng = kotlin.random.Random(System.currentTimeMillis())
-            frames += drawBattleFrame(width, height, leftSprite.frames.first(), rightSprite.frames.first(), state, null)
+            frames += drawBattleFrame(width, height, leftSprite.frames.last(), rightSprite.frames.last(), state, null)
             var turns = 0
             while (!state.finished && turns < 80 && frames.size < 24) {
                 val before = state
@@ -312,7 +312,9 @@ class WidgetRenderer(private val context: Context) {
                     before.left.fighter.speed >= before.right.fighter.speed
                 } else before.turn % 2 == 0
                 frames += drawBattleFrame(
-                    width, height, leftSprite.frames.first(), rightSprite.frames.first(),
+                    width, height,
+                    leftSprite.frames[(turns % leftSprite.frames.size).coerceAtLeast(0)],
+                    rightSprite.frames[(turns % rightSprite.frames.size).coerceAtLeast(0)],
                     state, attackerOnLeft,
                 )
             }
