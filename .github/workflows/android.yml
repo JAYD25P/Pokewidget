@@ -13,7 +13,7 @@ name: android
 
 on:
   push:
-    branches: ['dev/**']
+    branches: ['dev/**', 'feature/**']
     paths: ['app/**', 'gradle/**', '*.gradle.kts', '.github/workflows/android.yml']
   workflow_dispatch:
 
