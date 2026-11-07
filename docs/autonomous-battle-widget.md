@@ -48,4 +48,4 @@ Run the Android unit tests and debug APK build with JDK 17:
 bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The feature branch contains the workflow trigger for `feature/**`, but GitHub currently reports zero workflow runs for this branch and zero runs on the repository's default branch. The repository's default-branch workflow still watches only `dev/**`, and the feature branch cannot change that default-branch configuration without merging. No successful remote build or on-device launcher verification has been recorded; both are still required before treating the feature as release-ready.
+The feature branch's workflow file includes a `push` trigger for `feature/**`, but GitHub currently reports zero workflow runs for this branch and zero runs on the repository's default branch. The default-branch workflow itself still watches only `dev/**`. The available GitHub connection does not expose enough Actions settings to determine why no run was created. No successful remote build or on-device launcher verification has been recorded; both are still required before treating the feature as release-ready.
