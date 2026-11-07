@@ -398,13 +398,13 @@ class WidgetRenderer(private val context: Context) {
         hud(state.left.fighter.name, state.left.hp, state.left.fighter.maxHp, 8f * scale, 8f * scale, false)
         hud(state.right.fighter.name, state.right.hp, state.right.fighter.maxHp, width * .55f, 8f * scale, true)
 
-        fun drawSprite(sprite: android.graphics.Bitmap, centerX: Float, groundY: Float, fainted: Boolean, lunge: Boolean) {
+        fun drawSprite(sprite: android.graphics.Bitmap, centerX: Float, groundY: Float, fainted: Boolean, lunge: Boolean, lungeDirection: Float) {
             val maxW = width * .38f
             val maxH = height * .53f
             val factor = minOf(maxW / sprite.width, maxH / sprite.height)
             val w = sprite.width * factor
             val h = sprite.height * factor
-            val offset = if (lunge && !fainted) width * .035f else 0f
+            val offset = if (lunge && !fainted) width * .035f * lungeDirection else 0f
             val dest = android.graphics.RectF(centerX - w / 2f + offset, groundY - h, centerX + w / 2f + offset, groundY)
             if (fainted) canvas.save()
             if (fainted) canvas.rotate(-90f, centerX, groundY)
@@ -414,8 +414,32 @@ class WidgetRenderer(private val context: Context) {
             if (fainted) canvas.restore()
         }
         val ground = height * .91f
-        drawSprite(leftSprite, width * .29f, ground, state.left.fainted, attackerOnLeft == true)
-        drawSprite(rightSprite, width * .73f, ground, state.right.fainted, attackerOnLeft == false)
+        drawSprite(leftSprite, width * .29f, ground, state.left.fainted, attackerOnLeft == true, 1f)
+        drawSprite(rightSprite, width * .73f, ground, state.right.fainted, attackerOnLeft == false, -1f)
+
+        // A short impact burst makes a successful strike legible even when the 24-frame
+        // timeline has to sample a long battle down to a small number of snapshots.
+        if (attackerOnLeft != null && state.log.contains(" used ")) {
+            val impactX = if (attackerOnLeft) width * .73f else width * .29f
+            val impactY = ground - height * .22f
+            paint.color = android.graphics.Color.rgb(255, 225, 105)
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeWidth = 2f * scale
+            canvas.drawCircle(impactX, impactY, 7f * scale, paint)
+            for (spoke in 0 until 8) {
+                val angle = spoke * (Math.PI / 4.0)
+                val inner = 10f * scale
+                val outer = 16f * scale
+                canvas.drawLine(
+                    impactX + kotlin.math.cos(angle).toFloat() * inner,
+                    impactY + kotlin.math.sin(angle).toFloat() * inner,
+                    impactX + kotlin.math.cos(angle).toFloat() * outer,
+                    impactY + kotlin.math.sin(angle).toFloat() * outer,
+                    paint,
+                )
+            }
+            paint.style = android.graphics.Paint.Style.FILL
+        }
         paint.color = android.graphics.Color.rgb(255, 255, 255)
         paint.textSize = 9f * scale
         paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
