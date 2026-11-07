@@ -32,7 +32,7 @@ The battle engine contains a compact move list, attack stats, HP, accuracy check
 
 - Uses the existing catalog's `veekun_emerald_animated` sprite set, which points to the original Emerald-era animated battle sprite files.
 - Sprite files are fetched through the existing `SpriteSource` cache; they are not bundled into the APK by this feature.
-- Both sprites, the HP HUD and battle log are rasterized into a bounded series of bitmaps.
+- Both sprites, the HP HUD and battle log are rasterized into a bounded series of bitmaps. Attacks use directional lunges and a brief hit burst; fainted sprites are tilted and dimmed.
 - The sequence is handed to Android `RemoteViews` as child views in the existing `ViewFlipper`. The launcher advances those frames without a continuously running service or per-second alarm.
 - The sequence is capped to keep bitmap transfer bounded. The battle engine continues to resolve the duel off-screen if the visible frame cap is reached, then appends the result frame.
 
@@ -48,4 +48,4 @@ Run the Android unit tests and debug APK build with JDK 17:
 bash ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The GitHub Actions Android workflow is configured to watch `feature/**` branches. A successful remote run and on-device launcher verification are still required before treating the feature as release-ready.
+The feature branch contains the workflow trigger for `feature/**`, but GitHub currently reports zero workflow runs for this branch and zero runs on the repository's default branch. The repository's default-branch workflow still watches only `dev/**`, and the feature branch cannot change that default-branch configuration without merging. No successful remote build or on-device launcher verification has been recorded; both are still required before treating the feature as release-ready.
