@@ -309,9 +309,7 @@ class WidgetRenderer(private val context: Context) {
                 val before = state
                 state = AutonomousBattle.advance(state, rng)
                 turns++
-                val attackerOnLeft = if (before.turn == 0) {
-                    before.left.fighter.speed >= before.right.fighter.speed
-                } else before.turn % 2 == 0
+                val attackerOnLeft = AutonomousBattle.isLeftAttacker(before)
                 timeline += state to attackerOnLeft
             }
             // Preserve the duel from opening to fainting while bounding the bitmaps
