@@ -133,6 +133,7 @@ fun ConfigScreen(
         ) {
             PreviewPanel(state)
             PreviewToggles(state, actions, onUpdate)
+            BattleModeSection(state, onUpdate)
 
             Panel {
                 SectionHeader("Pokémon")
@@ -174,6 +175,67 @@ fun ConfigScreen(
             )
             Spacer(Modifier.height(8.dp))
             Caption(FIRST_DRAW_NOTE)
+        }
+    }
+}
+
+/** Battle mode uses the Emerald dual-sprite renderer and a closed ten-Pokémon roster. */
+@Composable
+private fun BattleModeSection(
+    state: ConfigUiState,
+    onUpdate: ((WidgetConfig) -> WidgetConfig) -> Unit,
+) {
+    val roster = listOf(
+        25 to "Pikachu", 6 to "Charizard", 34 to "Nidoking", 18 to "Pidgeot",
+        123 to "Scyther", 95 to "Onix", 93 to "Haunter", 150 to "Mewtwo",
+        121 to "Starmie", 2 to "Ivysaur",
+    )
+    fun slotLabel(id: Int?): String = id?.let { selected -> roster.firstOrNull { it.first == selected }?.second } ?: "Random"
+    fun nextLock(current: Int?): Int? {
+        val index = roster.indexOfFirst { it.first == current }
+        return if (index < 0) roster.first().first else if (index == roster.lastIndex) null else roster[index + 1].first
+    }
+    Panel {
+        SectionHeader("Autonomous battle")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Two Pokémon fight automatically", style = MaterialTheme.typography.bodyMedium)
+                Caption("Complete battle · fight until one faints")
+            }
+            Switch(
+                checked = state.config.battleEnabled,
+                onCheckedChange = { enabled -> onUpdate { it.copy(battleEnabled = enabled) } },
+            )
+        }
+        AnimatedVisibility(visible = state.config.battleEnabled) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Caption("Tap a slot to cycle through favourites. Random lets the widget choose a new opponent.")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        Modifier.weight(1f).clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onUpdate { it.copy(battleLeftLockId = nextLock(it.battleLeftLockId)) } }
+                            .padding(10.dp),
+                    ) {
+                        Caption("LEFT SLOT")
+                        Text(slotLabel(state.config.battleLeftLockId), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Column(
+                        Modifier.weight(1f).clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onUpdate { it.copy(battleRightLockId = nextLock(it.battleRightLockId)) } }
+                            .padding(10.dp),
+                    ) {
+                        Caption("RIGHT SLOT")
+                        Text(slotLabel(state.config.battleRightLockId), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                Caption("Both slots cannot use the same Pokémon. If both are locked to the same choice, the opponent is selected randomly.")
+            }
         }
     }
 }
