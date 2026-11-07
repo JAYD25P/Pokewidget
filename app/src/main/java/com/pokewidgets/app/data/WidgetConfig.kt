@@ -140,6 +140,12 @@ data class WidgetConfig(
 
     /** Set while an "excited" tap burst is running, so the renderer speeds the flip up. */
     val excitedUntilMs: Long = 0L,
+
+    /** Autonomous dual-Pokémon battle mode; disabled for existing widgets by default. */
+    val battleEnabled: Boolean = false,
+    /** Optional pinned roster ids for the left and right battle slots. */
+    val battleLeftLockId: Int? = null,
+    val battleRightLockId: Int? = null,
 ) {
     val spriteKey: SpriteKey
         get() = SpriteKey(setId, pokemonId, back = back, shiny = shiny, female = female, style = style)
