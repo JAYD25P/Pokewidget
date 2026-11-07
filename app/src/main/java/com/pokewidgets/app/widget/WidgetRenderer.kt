@@ -302,30 +302,36 @@ class WidgetRenderer(private val context: Context) {
             val frames = ArrayList<android.graphics.Bitmap>()
             var state = AutonomousBattle.start(left, right)
             val rng = kotlin.random.Random(System.currentTimeMillis())
-            frames += drawBattleFrame(width, height, leftSprite.frames.last(), rightSprite.frames.last(), state, null)
+            val timeline = ArrayList<Pair<AutonomousBattle.BattleState, Boolean?>>()
+            timeline += state to null
             var turns = 0
-            while (!state.finished && turns < 80 && frames.size < 24) {
+            while (!state.finished && turns < 250) {
                 val before = state
                 state = AutonomousBattle.advance(state, rng)
                 turns++
                 val attackerOnLeft = if (before.turn == 0) {
                     before.left.fighter.speed >= before.right.fighter.speed
                 } else before.turn % 2 == 0
-                frames += drawBattleFrame(
-                    width, height,
-                    leftSprite.frames[(turns % leftSprite.frames.size).coerceAtLeast(0)],
-                    rightSprite.frames[(turns % rightSprite.frames.size).coerceAtLeast(0)],
-                    state, attackerOnLeft,
-                )
+                timeline += state to attackerOnLeft
             }
-            if (!state.finished) {
-                // A hard ceiling protects RemoteViews memory on long defensive matchups.
-                // Resolve the remaining duel off-screen and show its final faint state.
-                while (!state.finished && turns < 250) {
-                    state = AutonomousBattle.advance(state, rng)
-                    turns++
-                }
-                frames += drawBattleFrame(width, height, leftSprite.frames.first(), rightSprite.frames.first(), state, null)
+            // Preserve the duel from opening to fainting while bounding the bitmaps
+            // transferred through RemoteViews.
+            val frameCount = minOf(24, timeline.size)
+            val sampled = (0 until frameCount).map { index ->
+                val sourceIndex = if (frameCount <= 1) 0
+                    else index * timeline.lastIndex / (frameCount - 1)
+                timeline[sourceIndex]
+            }
+            sampled.forEach { (frameState, attackerOnLeft) ->
+                val spriteFrame = frameState.turn
+                frames += drawBattleFrame(
+                    width,
+                    height,
+                    leftSprite.frames[spriteFrame % leftSprite.frames.size],
+                    rightSprite.frames[spriteFrame % rightSprite.frames.size],
+                    frameState,
+                    attackerOnLeft,
+                )
             }
             val views = RemoteViews(context.packageName, R.layout.widget_root)
             views.removeAllViews(R.id.widget_flipper)
