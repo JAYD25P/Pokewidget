@@ -79,6 +79,12 @@ object AutonomousBattle {
     fun start(left: Fighter, right: Fighter): BattleState =
         BattleState(Combatant(left), Combatant(right))
 
+    /** Resolves the acting side for this turn, preserving the speed-based opening order. */
+    fun isLeftAttacker(state: BattleState): Boolean {
+        val firstIsLeft = state.left.fighter.speed >= state.right.fighter.speed
+        return if (state.turn % 2 == 0) firstIsLeft else !firstIsLeft
+    }
+
     /**
      * Advances one attack. The faster Pokémon acts first; thereafter turns alternate.
      * Damage is bounded and type effectiveness uses the standard single/double/resisted
@@ -89,8 +95,7 @@ object AutonomousBattle {
         val leftActs = when {
             state.left.fainted -> false
             state.right.fainted -> true
-            state.turn == 0 -> state.left.fighter.speed >= state.right.fighter.speed
-            else -> state.turn % 2 == 0
+            else -> isLeftAttacker(state)
         }
         val attacker = if (leftActs) state.left else state.right
         val defender = if (leftActs) state.right else state.left
