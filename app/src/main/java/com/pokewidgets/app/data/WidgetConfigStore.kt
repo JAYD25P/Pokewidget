@@ -64,6 +64,11 @@ class WidgetConfigStore(context: Context) {
             prefs[Keys.surprisePool(widgetId)] = SurprisePicker.encode(config.surprisePool)
             prefs[Keys.surpriseNext(widgetId)] = config.surpriseNext
             prefs[Keys.excited(widgetId)] = config.excitedUntilMs
+            prefs[Keys.battleEnabled(widgetId)] = config.battleEnabled
+            config.battleLeftLockId?.let { prefs[Keys.battleLeftLock(widgetId)] = it }
+                ?: prefs.remove(Keys.battleLeftLock(widgetId))
+            config.battleRightLockId?.let { prefs[Keys.battleRightLock(widgetId)] = it }
+                ?: prefs.remove(Keys.battleRightLock(widgetId))
         }
     }
 
@@ -157,6 +162,9 @@ class WidgetConfigStore(context: Context) {
             surprisePool = SurprisePicker.decode(prefs[Keys.surprisePool(id)]),
             surpriseNext = prefs[Keys.surpriseNext(id)] ?: 0,
             excitedUntilMs = prefs[Keys.excited(id)] ?: 0L,
+            battleEnabled = prefs[Keys.battleEnabled(id)] ?: d.battleEnabled,
+            battleLeftLockId = prefs[Keys.battleLeftLock(id)],
+            battleRightLockId = prefs[Keys.battleRightLock(id)],
         )
     }
 
@@ -209,5 +217,8 @@ class WidgetConfigStore(context: Context) {
         fun surprisePool(id: Int) = stringPreferencesKey("$id.surprisePool")
         fun surpriseNext(id: Int) = intPreferencesKey("$id.surpriseNext")
         fun excited(id: Int) = longPreferencesKey("$id.excited")
+        fun battleEnabled(id: Int) = booleanPreferencesKey("$id.battleEnabled")
+        fun battleLeftLock(id: Int) = intPreferencesKey("$id.battleLeftLock")
+        fun battleRightLock(id: Int) = intPreferencesKey("$id.battleRightLock")
     }
 }
