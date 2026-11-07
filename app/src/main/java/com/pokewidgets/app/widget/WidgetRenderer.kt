@@ -213,6 +213,9 @@ class WidgetRenderer(private val context: Context) {
         options: Bundle?,
         budgetScale: Double = 1.0,
     ): RemoteViews {
+        if (config.battleEnabled) {
+            return buildAutonomousBattleViews(widgetId, config, options, budgetScale)
+        }
         val set = catalog.set(config.setId)
             ?: return statusViews(widgetId, config, "Sprite set unavailable")
 
@@ -254,6 +257,174 @@ class WidgetRenderer(private val context: Context) {
             decoded.recycle()
             layers.recycle()
         }
+    }
+
+    /**
+     * Pre-renders a complete two-Pokémon battle into a bounded sequence of launcher-safe
+     * RemoteViews frames. The launcher advances the sequence itself; no service or
+     * per-second alarm is required while the widget is visible.
+     */
+    private suspend fun buildAutonomousBattleViews(
+        widgetId: Int,
+        config: WidgetConfig,
+        options: Bundle?,
+        budgetScale: Double,
+    ): RemoteViews {
+        val emerald = catalog.set("veekun_emerald_animated")
+            ?: return statusViews(widgetId, config, "Emerald sprites unavailable")
+        val (left, right) = AutonomousBattle.choosePair(
+            config.battleLeftLockId,
+            config.battleRightLockId,
+        )
+        suspend fun decode(id: Int): DecodedSprite? {
+            val key = com.pokewidgets.app.catalog.SpriteKey(emerald.id, id)
+            val bytes = when (val fetched = source.spriteParts(emerald, key)) {
+                is SpriteFetch.Ok -> fetched.parts
+                SpriteFetch.Missing, SpriteFetch.Offline -> return null
+            }
+            return GifFrames.decode(bytes, isGif = true, delaysMs = emerald.frameDelaysMs)
+        }
+        val leftSprite = decode(left.id)
+            ?: return statusViews(widgetId, config, "Couldn't load ${left.name}")
+        val rightSprite = decode(right.id)
+            ?: run {
+                leftSprite.recycle()
+                return statusViews(widgetId, config, "Couldn't load ${right.name}")
+            }
+        try {
+            val metrics = hostMetrics(widgetId, options)
+            val (availableW, availableH) = contentBoxPx(options, metrics)
+            // Bound bitmap memory independently of launcher-reported dimensions. A 4×3
+            // widget remains crisp at its compact size without shipping dozens of huge frames.
+            val scale = minOf(1.0, 240.0 / availableW.coerceAtLeast(1), 180.0 / availableH.coerceAtLeast(1))
+            val width = (availableW * scale).roundToInt().coerceAtLeast(160)
+            val height = (availableH * scale).roundToInt().coerceAtLeast(120)
+            val frames = ArrayList<android.graphics.Bitmap>()
+            var state = AutonomousBattle.start(left, right)
+            val rng = kotlin.random.Random(System.currentTimeMillis())
+            frames += drawBattleFrame(width, height, leftSprite.frames.first(), rightSprite.frames.first(), state, null)
+            var turns = 0
+            while (!state.finished && turns < 80 && frames.size < 24) {
+                val before = state
+                state = AutonomousBattle.advance(state, rng)
+                turns++
+                val attackerOnLeft = if (before.turn == 0) {
+                    before.left.fighter.speed >= before.right.fighter.speed
+                } else before.turn % 2 == 0
+                frames += drawBattleFrame(
+                    width, height, leftSprite.frames.first(), rightSprite.frames.first(),
+                    state, attackerOnLeft,
+                )
+            }
+            if (!state.finished) {
+                // A hard ceiling protects RemoteViews memory on long defensive matchups.
+                // Resolve the remaining duel off-screen and show its final faint state.
+                while (!state.finished && turns < 250) {
+                    state = AutonomousBattle.advance(state, rng)
+                    turns++
+                }
+                frames += drawBattleFrame(width, height, leftSprite.frames.first(), rightSprite.frames.first(), state, null)
+            }
+            val views = RemoteViews(context.packageName, R.layout.widget_root)
+            views.removeAllViews(R.id.widget_flipper)
+            views.setViewVisibility(R.id.widget_status, View.GONE)
+            views.setViewVisibility(R.id.widget_background, View.GONE)
+            views.setViewVisibility(R.id.widget_flipper, View.VISIBLE)
+            frames.forEach { bitmap ->
+                val child = RemoteViews(context.packageName, R.layout.widget_frame)
+                child.setImageViewBitmap(R.id.widget_frame_image, bitmap)
+                views.addView(R.id.widget_flipper, child)
+            }
+            startFlipping(views, 1_150)
+            views.setOnClickPendingIntent(R.id.widget_root, tapIntent(widgetId, config))
+            Log.d(TAG, "autonomous battle: ${left.name} vs ${right.name}, ${frames.size} frames, winner=${state.winnerId}")
+            return views
+        } finally {
+            leftSprite.recycle()
+            rightSprite.recycle()
+        }
+    }
+
+    /** Draws a compact Emerald-inspired battle HUD and both transparent battle sprites. */
+    private fun drawBattleFrame(
+        width: Int,
+        height: Int,
+        leftSprite: android.graphics.Bitmap,
+        rightSprite: android.graphics.Bitmap,
+        state: AutonomousBattle.BattleState,
+        attackerOnLeft: Boolean?,
+    ): android.graphics.Bitmap {
+        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+        val scale = width / 240f
+        val topH = height * 0.34f
+        canvas.drawColor(android.graphics.Color.rgb(210, 230, 220))
+        paint.color = android.graphics.Color.rgb(238, 244, 236)
+        canvas.drawRoundRect(5f * scale, 5f * scale, width - 5f * scale, topH, 7f * scale, 7f * scale, paint)
+        paint.color = android.graphics.Color.rgb(95, 145, 105)
+        canvas.drawOval(-width * .12f, height * .57f, width * .63f, height * 1.08f, paint)
+        paint.color = android.graphics.Color.rgb(80, 130, 95)
+        canvas.drawOval(width * .43f, height * .63f, width * 1.12f, height * 1.08f, paint)
+
+        fun text(value: String, x: Float, y: Float, size: Float, color: Int = android.graphics.Color.BLACK) {
+            paint.color = color
+            paint.textSize = size
+            paint.typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+            canvas.drawText(value, x, y, paint)
+        }
+        fun hud(name: String, hp: Int, maxHp: Int, x: Float, y: Float, rightAligned: Boolean) {
+            val boxW = width * .43f
+            val boxH = height * .19f
+            paint.color = android.graphics.Color.rgb(248, 248, 226)
+            canvas.drawRoundRect(x, y, x + boxW, y + boxH, 5f * scale, 5f * scale, paint)
+            text(name, x + 5f * scale, y + 13f * scale, 11f * scale)
+            val barX = x + 5f * scale
+            val barY = y + 20f * scale
+            val barW = boxW - 10f * scale
+            paint.color = android.graphics.Color.DKGRAY
+            canvas.drawRoundRect(barX, barY, barX + barW, barY + 4f * scale, 2f * scale, 2f * scale, paint)
+            val ratio = (hp.toFloat() / maxHp).coerceIn(0f, 1f)
+            paint.color = when { ratio > .5f -> android.graphics.Color.rgb(74, 183, 76); ratio > .2f -> android.graphics.Color.rgb(230, 185, 55); else -> android.graphics.Color.rgb(210, 70, 55) }
+            canvas.drawRoundRect(barX, barY, barX + barW * ratio, barY + 4f * scale, 2f * scale, 2f * scale, paint)
+            text("HP $hp/$maxHp", barX, y + 34f * scale, 8f * scale, android.graphics.Color.DKGRAY)
+        }
+        hud(state.left.fighter.name, state.left.hp, state.left.fighter.maxHp, 8f * scale, 8f * scale, false)
+        hud(state.right.fighter.name, state.right.hp, state.right.fighter.maxHp, width * .55f, 8f * scale, true)
+
+        fun drawSprite(sprite: android.graphics.Bitmap, centerX: Float, groundY: Float, fainted: Boolean, lunge: Boolean) {
+            val maxW = width * .38f
+            val maxH = height * .53f
+            val factor = minOf(maxW / sprite.width, maxH / sprite.height)
+            val w = sprite.width * factor
+            val h = sprite.height * factor
+            val offset = if (lunge && !fainted) width * .035f else 0f
+            val dest = android.graphics.RectF(centerX - w / 2f + offset, groundY - h, centerX + w / 2f + offset, groundY)
+            if (fainted) canvas.save()
+            if (fainted) canvas.rotate(-90f, centerX, groundY)
+            paint.alpha = if (fainted) 105 else 255
+            canvas.drawBitmap(sprite, null, dest, paint)
+            paint.alpha = 255
+            if (fainted) canvas.restore()
+        }
+        val ground = height * .91f
+        drawSprite(leftSprite, width * .29f, ground, state.left.fainted, attackerOnLeft == true)
+        drawSprite(rightSprite, width * .73f, ground, state.right.fainted, attackerOnLeft == false)
+        paint.color = android.graphics.Color.rgb(255, 255, 255)
+        paint.textSize = 9f * scale
+        paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        val message = when {
+            state.finished -> "${state.winnerId?.let { AutonomousBattle.fighter(it)?.name } ?: "Winner"} wins!"
+            state.log == "Battle start!" -> "A wild battle begins!"
+            else -> state.log
+        }
+        val maxChars = 36
+        val shown = if (message.length > maxChars) message.take(maxChars - 1) + "…" else message
+        val msgW = paint.measureText(shown)
+        paint.color = android.graphics.Color.argb(210, 35, 50, 45)
+        canvas.drawRoundRect(5f * scale, height * .69f, width - 5f * scale, height * .82f, 4f * scale, 4f * scale, paint)
+        text(shown, ((width - msgW) / 2f).coerceAtLeast(7f * scale), height * .77f, 9f * scale, android.graphics.Color.WHITE)
+        return bitmap
     }
 
     /** The optional extras around the Pokémon, as decoded source images. */
