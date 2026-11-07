@@ -1,6 +1,6 @@
 # Android test build — never released.
 #
-# Runs on every push to a dev/* branch that touches the app, or by hand (Actions → android →
+# Runs on every push to a dev/* or feature/* branch that touches the app, or by hand (Actions → android →
 # Run workflow) once this file is on main. Runs the unit tests, builds the debug APK and
 # uploads it to the run as a 14-day artifact, downloadable by anyone signed in to GitHub with
 # access to the repo. Nothing here creates a tag, a release or a draft release.
